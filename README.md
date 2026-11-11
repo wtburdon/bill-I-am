@@ -6,7 +6,7 @@ Billy's personal portfolio and creative site for writing, photography, drawings,
 
 | Path | Purpose |
 | --- | --- |
-| web/ | React frontend and browser games |
+| client/ | React frontend |
 | server/ | Go HTTP server |
 | content/ | Writing, photo galleries, and drawings published through Git |
 | deploy/ | Docker Compose and Kubernetes configuration |
