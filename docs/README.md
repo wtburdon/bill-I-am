@@ -37,7 +37,7 @@ flowchart LR
 
 ## Publishing contract
 
-The [Go backend specification](go-backend.md) defines the writing schema, HTTP responses, runtime behavior, and acceptance checks.
+The [Go backend specification](go-backend.md) defines the writing schema, HTTP responses, runtime behavior, and acceptance checks. The [React client specification](react-client.md) covers page routes, poem rendering, navigation, and how the client handles those responses.
 
 Use one folder per published item. For example, `app/content/writing/first-light/index.md` supplies the slug `first-light`. YAML front matter supplies `title`, ISO publication date, and an optional summary. Preserve line breaks and stanza spacing when rendering poems. Galleries use an `index.json` with a title, date, and ordered images with relative filenames, alt text, and optional captions. Keep original-resolution artwork in the author's archive. Publish only the selected web versions.
 
