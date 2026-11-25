@@ -8,8 +8,10 @@ See the [platform architecture](docs/README.md) for the proposed design and the 
 
 | Path | Purpose |
 | --- | --- |
-| client/ | React frontend |
-| server/ | Go HTTP server |
-| content/ | Writing, photo galleries, and drawings published through Git |
+| app/client/ | React frontend |
+| app/server/ | Go HTTP server |
+| app/content/ | Writing, photo galleries, and drawings published through Git |
 | deploy/ | Planned Cloudflare, Docker Compose, and Kubernetes configuration |
 | .github/workflows/ | GitHub Actions workflows |
+| .agents/skills/ | Repository-specific agent skills |
+| docs/ | Project documentation and architecture decisions |
