@@ -27,17 +27,20 @@ func main() {
 
 func run(args []string, output io.Writer) error {
 	command := "serve"
-	if len(args) > 0 && (args[0] == "validate" || args[0] == "serve") {
+	if len(args) > 0 && (args[0] == "validate" || args[0] == "serve" || args[0] == "export" || args[0] == "publish") {
 		command, args = args[0], args[1:]
 	}
 
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(output)
 	contentDir := flags.String("content-dir", "app/content", "published content directory")
-	var addr, clientDir *string
+	var addr, outputDir, sha *string
 	if command == "serve" {
 		addr = flags.String("addr", ":8080", "HTTP listen address")
-		clientDir = flags.String("client-dir", "", "built client directory")
+	}
+	if command == "export" || command == "publish" {
+		outputDir = flags.String("release-dir", "", "exported release directory")
+		sha = flags.String("sha", "", "full Git SHA")
 	}
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -45,7 +48,33 @@ func run(args []string, output io.Writer) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected argument %q", flags.Arg(0))
 	}
-	index, err := loadContent(*contentDir)
+	if outputDir != nil && *outputDir == "" {
+		return errors.New("-release-dir is required")
+	}
+	if command == "publish" {
+		bucket, err := bucketFromEnv()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		return publishRelease(ctx, bucket, *outputDir, *sha)
+	}
+
+	var index contentIndex
+	var err error
+	if release := os.Getenv("R2_RELEASE_SHA"); command == "serve" && release != "" {
+		if release != gitSHA {
+			return fmt.Errorf("configured release %q does not match image SHA %q", release, gitSHA)
+		}
+		bucket, bucketErr := bucketFromEnv()
+		if bucketErr != nil {
+			return bucketErr
+		}
+		index, err = loadR2Snapshot(bucket, release)
+	} else {
+		index, err = loadContent(*contentDir)
+	}
 	if err != nil {
 		return err
 	}
@@ -54,15 +83,10 @@ func run(args []string, output io.Writer) error {
 		return nil
 	}
 
-	var dist *os.Root
-	if *clientDir != "" {
-		dist, err = os.OpenRoot(*clientDir)
-		if err != nil {
-			return fmt.Errorf("open client directory: %w", err)
-		}
-		defer dist.Close()
+	if command == "export" {
+		return exportRelease(index, *contentDir, *outputDir, *sha)
 	}
-	return serve(*addr, newSite(index, dist, gitSHA), log.New(output, "", log.LstdFlags))
+	return serve(*addr, newSite(index, gitSHA), log.New(output, "", log.LstdFlags))
 }
 
 func serve(addr string, handler *site, logger *log.Logger) error {

@@ -5,8 +5,8 @@
 | Order | Deliverable | How to verify it |
 | --- | --- | --- |
 | 1. Publish one poem locally | Add a real or sample poem under `app/content/writing/`. Implement the Go loader, list/detail handlers, and React writing index and reader. Add Vite's local proxy. Start PR checks for the client build, Go tests, and content validation. | Open and refresh the poem's URL. Stanzas retain their spacing. An unknown slug returns a 404 from Go and a helpful page in React. Editing the Markdown updates the reading view after reload and content reindexing. |
-| 2. Package the release | Add the multi-stage Dockerfile, Compose service, health endpoints, and embedded release SHA. Extend CI to build the image and run HTTP smoke tests. | From a fresh checkout, `docker compose -f deploy/compose.yaml up --build` serves the poem and React assets from one port. A missing API route returns 404. A malformed content file fails validation before deployment. |
-| 3. Ship the first public release | Add the Worker, asset routing, named container binding, and main-branch deploy and recovery jobs. Run the first deploy on a Cloudflare-provided hostname. Record account prerequisites and the verified release in GitHub. | Merge a one-line poem edit. The public deep link shows it, the API reports the merge SHA, and an unknown media URL returns 404. Restore the previous release, verify the old line and SHA, then promote the new release again. |
+| 2. Package the release | Use the API image, Compose mounts, health endpoints, and embedded release SHA. Build Vite separately. | From a fresh checkout, run the API through Compose and open the site through Vite. A missing API route returns 404. A malformed content file fails validation before deployment. |
+| 3. Ship the first public release | Publish each Git SHA to private R2 and deploy matching Worker assets and a digest-pinned API image. Run the staging drills in the [release runbook](../deploy/cloudflare/README.md). | Deploy two revisions with different writing and media. Verify both and restore the earlier SHA, writing, and media together. |
 | 4. Publish the portfolio | Add photography and drawing collections, responsive gallery thumbnails, full-size views, alt text, and project pages. Choose a permanent hostname before widely sharing links. | Publish one gallery and one project from Git. Navigate the gallery by keyboard, open a project on a phone, and follow a shared gallery URL in a fresh browser. CI catches a broken image reference. |
 | 5. Ship a browser game | Add a game catalog entry and one lazy-loaded game route. Keep game code in the client and instructions, credits, and cover art in content. | A direct game URL loads the game and its instructions. Visiting a poem does not fetch the game bundle. Returning to the gallery stops the game's animation and input handlers. |
 
@@ -20,7 +20,6 @@ Start after milestone 2, as soon as the portable image passes its smoke tests. T
 
 ## Later decisions
 
-- **Move media to R2** when measured release size or build time becomes a burden. Pilot one gallery and verify its existing URLs still work after a rollback.
 - **Add Minecraft hosting** when edition, audience, and hosting budget are known. Give the game its own hostname, persistent world, backups, and restore drill. Website deploys should be possible while players are online.
 
-**First pull request:** deliver milestone 1 with one poem as the fixture for authoring, Go tests, and the browser reading experience. That URL becomes the smoke test for every deployment target.
+The Go image smoke tests discover published writing dynamically. CI also tests a renamed poem and an empty collection. The Worker integration runs its own releases to test content changes and rollback independently of the published sample.

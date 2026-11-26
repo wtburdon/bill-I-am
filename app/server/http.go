@@ -3,27 +3,20 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"mime"
 	"net/http"
-	"os"
-	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 )
 
-var hashedAsset = regexp.MustCompile(`-[A-Za-z0-9_-]{8,}\.[^.]+$`)
-
 type site struct {
 	index    contentIndex
-	dist     *os.Root
 	gitSHA   string
 	draining atomic.Bool
 }
 
-func newSite(index contentIndex, dist *os.Root, gitSHA string) *site {
-	return &site{index: index, dist: dist, gitSHA: gitSHA}
+func newSite(index contentIndex, gitSHA string) *site {
+	return &site{index: index, gitSHA: gitSHA}
 }
 
 func (s *site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -31,12 +24,10 @@ func (s *site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch first {
 	case "api":
 		s.api(w, r)
-	case "media":
-		writeText(w, r, http.StatusNotFound, "Media not found.\n")
 	case "livez", "readyz":
 		s.probe(w, r)
 	default:
-		s.frontend(w, r)
+		writeText(w, r, http.StatusNotFound, "Not found.\n")
 	}
 }
 
@@ -125,66 +116,4 @@ func (s *site) probe(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeText(w, r, 200, "ok\n")
 	}
-}
-
-func (s *site) frontend(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	if s.dist == nil || strings.ContainsAny(name, "\\:\x00") ||
-		(name != "" && (path.Clean(name) != name || name == "." || name == ".." || strings.HasPrefix(name, "../"))) {
-		writeText(w, r, 404, "Not found.\n")
-		return
-	}
-	if name != "" && s.serveFile(w, r, name) {
-		return
-	}
-	// Vite's assets directory and file-looking URLs never fall back to the shell.
-	if name != "assets" && !strings.HasPrefix(name, "assets/") && path.Ext(name) == "" {
-		w.Header().Add("Vary", "Accept")
-		if acceptsHTML(r.Header.Values("Accept")) && s.serveFile(w, r, "index.html") {
-			return
-		}
-	}
-	writeText(w, r, 404, "Not found.\n")
-}
-
-func acceptsHTML(headers []string) bool {
-	for _, header := range headers {
-		for _, entry := range strings.Split(header, ",") {
-			mediaType, params, err := mime.ParseMediaType(entry)
-			if err != nil || mediaType != "text/html" {
-				continue
-			}
-			quality, specified := params["q"]
-			if !specified {
-				return true
-			}
-			if q, err := strconv.ParseFloat(quality, 64); err == nil && q > 0 && q <= 1 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (s *site) serveFile(w http.ResponseWriter, r *http.Request, name string) bool {
-	info, err := s.dist.Stat(name)
-	if err != nil || !info.Mode().IsRegular() {
-		return false
-	}
-	file, err := s.dist.Open(name)
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-	if !allowRead(w, r) {
-		writeText(w, r, 405, "Method not allowed.\n")
-		return true
-	}
-	cache := "no-cache"
-	if strings.HasPrefix(name, "assets/") && hashedAsset.MatchString(path.Base(name)) {
-		cache = "public, max-age=31536000, immutable"
-	}
-	w.Header().Set("Cache-Control", cache)
-	http.ServeContent(w, r, path.Base(name), info.ModTime(), file)
-	return true
 }

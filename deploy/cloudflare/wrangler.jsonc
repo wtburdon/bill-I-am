@@ -1,0 +1,14 @@
+{
+  "name": "billiam-local",
+  "main": "./router.js",
+  "compatibility_date": "2026-11-24",
+  "assets": {
+    "directory": "../../app/client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": ["/api", "/api/*", "/media", "/media/*"]
+  },
+  "r2_buckets": [
+    { "binding": "CONTENT", "bucket_name": "billiam-local" }
+  ]
+}

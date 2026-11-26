@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billiam-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: billiam-api
+  template:
+    metadata:
+      labels:
+        app: billiam-api
+    spec:
+      containers:
+        - name: api
+          image: billiam-api:local
+          imagePullPolicy: Never
+          args: ["serve", "-content-dir", "/content"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+          livenessProbe:
+            httpGet: { path: /livez, port: 8080 }
+          volumeMounts:
+            - name: writing
+              mountPath: /content/writing/fixture/index.md
+              subPath: index.md
+              readOnly: true
+      volumes:
+        - name: writing
+          configMap: { name: billiam-writing }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: billiam-api
+spec:
+  selector:
+    app: billiam-api
+  ports:
+    - { port: 8080, targetPort: 8080 }

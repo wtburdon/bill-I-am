@@ -1,0 +1,7 @@
+**
+!app/
+!app/server/
+!app/server/Dockerfile
+!app/server/*.go
+!app/server/go.mod
+!app/server/go.sum

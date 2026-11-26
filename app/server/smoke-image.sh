@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build in a temporary context so the smoke client cannot replace a local Vite build.
+# Mount each writing fixture outside the API image.
 root=$(git rev-parse --show-toplevel)
 sha=$(git rev-parse HEAD)
 context=$(mktemp -d)
@@ -14,8 +14,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$context/app/client/dist/assets"
-cp -R "$root/app/server" "$context/app/"
+mkdir -p "$context/app"
 case "${1:-checked-out}" in
   checked-out)
     cp -R "$root/app/content" "$context/app/"
@@ -35,14 +34,14 @@ case "${1:-checked-out}" in
     exit 2
     ;;
 esac
-cat > "$context/app/client/dist/index.html" <<'HTML'
-<!doctype html><title>Backend smoke test</title><script type="module" src="/assets/smoke-D3Lkc82f.js"></script>
-HTML
-printf '%s\n' 'console.log("backend smoke test")' > "$context/app/client/dist/assets/smoke-D3Lkc82f.js"
-
 image=$(docker build --quiet --platform linux/amd64 --build-arg "GIT_SHA=$sha" \
-  -f "$context/app/server/Dockerfile" "$context")
-container=$(docker run --detach --publish 127.0.0.1::8080 "$image")
+  -f "$root/app/server/Dockerfile" "$root")
+fixture="$context/app/content"
+if command -v cygpath >/dev/null; then
+  fixture=$(cygpath -w "$fixture")
+fi
+container=$(MSYS_NO_PATHCONV=1 docker run --detach --publish 127.0.0.1::8080 \
+  --mount "type=bind,source=$fixture,target=/content,readonly" "$image" serve -content-dir /content)
 origin="http://$(docker port "$container" 8080/tcp)"
 
 for ((attempt = 0; attempt < 20; attempt++)); do
@@ -53,8 +52,6 @@ for ((attempt = 0; attempt < 20; attempt++)); do
 done
 curl -fsS "$origin/readyz" | grep -qx ok
 curl -fsS "$origin/livez" | grep -qx ok
-curl -fsS -H 'Accept: text/html' "$origin/writing" | grep -Fq '<title>Backend smoke test</title>'
-curl -fsS "$origin/assets/smoke-D3Lkc82f.js" | grep -Fq 'console.log'
 python3 - "$origin" "$context/app/content/writing" <<'PY'
 import json
 import re
@@ -99,10 +96,8 @@ assert json.load(sys.stdin)["gitSha"] == sys.argv[1]
 ' "$sha"
 grep -Eiq '^cache-control: no-store[[:space:]]*$' "$context/version.headers"
 
-for path in /api/unknown /media/unknown/image.jpg /assets/missing.js; do
-  status=$(curl -sS -H 'Accept: text/html' -o /dev/null -w '%{http_code}' "$origin$path")
-  [[ "$status" == 404 ]] || { echo "$path returned $status, expected 404" >&2; exit 1; }
-done
+status=$(curl -sS -H 'Accept: text/html' -o /dev/null -w '%{http_code}' "$origin/api/unknown")
+[[ "$status" == 404 ]] || { echo "/api/unknown returned $status, expected 404" >&2; exit 1; }
 
 docker stop --time 20 "$container" >/dev/null
 [[ $(docker inspect --format '{{.State.ExitCode}}' "$container") == 0 ]]

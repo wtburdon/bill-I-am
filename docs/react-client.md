@@ -15,7 +15,7 @@ Use normal links so copying an address, opening a new tab, browser Back and Forw
 
 ## Reading and data handling
 
-- Use same-origin relative URLs. Configure the Vite development proxy for `/api` and `/media` to reach the local Go port. The release build emits a static distribution usable by Workers Static Assets and Go.
+- Use same-origin relative URLs. Vite proxies `/api` to the local Go port. The release build emits a static distribution for Workers Static Assets. Use the local Worker integration setup to exercise `/media` with R2 emulation.
 - Treat the writing list as an array and a detail response as one object. Use `body` as Markdown and `slug` as the link identifier. Format the date as a calendar day so a reader's time zone cannot shift publication to the day before.
 - Render single newlines within verse as visible line breaks and blank lines as stanza breaks. Preserve authored Markdown emphasis, links, and lists. Disable raw HTML and allow safe link schemes. Keep the reading column comfortably narrow and allow long lines to wrap on phones.
 - Give each route distinct loading, success, missing, and temporary failure states. A 404 on a detail request offers a link to Writing. Network errors, invalid successful payloads, and 5xx responses offer Retry on the current route. Cancel or disregard stale requests on route change so a slow response for one poem cannot replace another.
@@ -29,7 +29,7 @@ Game detail shows instructions and credits. Resolve its game module key through 
 
 ## Acceptance
 
-1. Build using the lockfile and run TypeScript checks in pull requests. Verify that both the Vite proxy and the built site can display the backend's `first-light` fixture from a fresh direct visit.
+1. Build using the lockfile and run TypeScript checks in pull requests. Verify that the Vite proxy and the built site can load a published fixture from a fresh direct visit.
 2. Open Writing, follow the poem, refresh, and navigate Back. Confirm title, date, one verse line break, and one stanza break. Read the page at a narrow viewport and follow every navigation link using the keyboard.
 3. Exercise an empty collection, a missing poem, and a failed request followed by Retry. Delay a detail response while navigating away and confirm the new page retains its own content.
 4. For later milestones, inspect the request log to confirm reading a poem downloads no game code. Open a game and return to a gallery, then verify its input handlers and animation have stopped.

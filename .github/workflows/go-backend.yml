@@ -29,3 +29,12 @@ jobs:
           bash app/server/smoke-image.sh checked-out
           bash app/server/smoke-image.sh renamed
           bash app/server/smoke-image.sh empty
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:worker
+        env:
+          TEST_API_CONTAINER: "1"
