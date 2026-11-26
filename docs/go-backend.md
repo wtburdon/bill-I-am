@@ -1,6 +1,6 @@
 # Go backend specification
 
-The Go service turns a Git content snapshot into a read-only HTTP API. The first release serves one collection, writing. Run the same binary behind Vite in development, behind the Worker in production, and as the full web origin in Compose and Kubernetes. The [architecture](README.md) owns Cloudflare routing and the [roadmap](roadmap.md) defines release order.
+The Go service exposes a read-only writing API. Run the same binary behind Vite in development and behind the Worker in production. Compose and Kubernetes use the API image with mounted writing fixtures. The [architecture](README.md) describes Cloudflare routing and the [roadmap](roadmap.md) defines release order.
 
 ## Authoring and validation
 
@@ -50,14 +50,14 @@ Use HTTP status to identify failure. All API errors have the shape `{"error":{"c
 
 ## Serving and packaging
 
-- Listen on all interfaces on port 8080 by default. Accept explicit content and client distribution directories. Development may omit the distribution when Vite serves the client. Inject the release SHA at build time and include it in startup logs.
-- Reserve the API, media, and probe routes before resolving frontend files. Return 404 for unknown API routes, unpublished media, and missing asset files. When serving the built client, return `index.html` for HTML document navigation to a client route. A refresh of `/writing/first-light` must work in the standalone image.
-- Send `Cache-Control: no-cache` on content responses, mutable media, and the HTML shell. Content-hashed frontend assets may use long-lived immutable caching. Shut down gracefully on SIGTERM so pending reads can finish.
-- During the gallery milestone, read ordered `index.json` entries, validate nonblank alt text and file existence, and serve only indexed media keys at `/media/{collection}/{slug}/{filename}`. Resolve filenames within the item directory and send the matching MIME type. In later collections, keep list summaries small and put ordered images, project links, or a registered game module key on the detail response.
+- Listen on all interfaces on port 8080 by default. Use `-content-dir` for local content. Production loads the versioned private R2 snapshot before listening. Every startup checks the content and every production startup checks the snapshot SHA against the image SHA.
+- Workers Static Assets serves the Vite build and React deep links. The Worker handles manifest-listed media and routes API requests to Go.
+- Send `Cache-Control: no-cache` on writing responses. Shut down gracefully on SIGTERM so pending reads can finish.
+- During the gallery milestone, read ordered `index.json` entries and validate nonblank alt text and file existence. Keep list summaries small and put ordered images, project links, or a registered game module key on the detail response.
 
 ## Acceptance
 
 1. Run validation against the poem fixture and against a copy with an impossible date. The valid fixture succeeds and the invalid one identifies its file and fails both validation and startup.
 2. Exercise list, detail, and empty collection responses with Go HTTP tests. Use two same-day items to verify the tie-breaker. Check the exact poem body, missing slug, and 405 response.
-3. Start the release image and fetch a deep link with an HTML Accept header, its JS asset, and the JSON detail endpoint. Check that a missing API, media, or JS file returns 404 even when requested by a browser.
+3. Exercise the writing API in the image with checked-out, renamed, and empty fixtures. In the Worker integration suite, fetch a React deep link, its JS asset, writing detail, and known and unknown media.
 4. Verify both probes and compare the uncacheable version response with the deployed Git SHA. After restoring a release, verify both its SHA and its poem text.

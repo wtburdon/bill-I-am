@@ -51,7 +51,7 @@ func loadContent(root string) (contentIndex, error) {
 		return nil, fmt.Errorf("%s/%s: %w", repoRoot, collectionName, err)
 	}
 
-	writings := collection{items: make(map[string]writing), summaries: []summary{}}
+	writings := newCollection()
 	var problems []error
 	seen := make(map[string]bool)
 	for _, entry := range entries {
@@ -82,19 +82,31 @@ func loadContent(root string) (contentIndex, error) {
 			problems = append(problems, fmt.Errorf("%s: %w", fileLabel, err))
 			continue
 		}
-		writings.items[slug] = item
-		writings.summaries = append(writings.summaries, item.summary)
+		writings.add(item)
 	}
 	if err := errors.Join(problems...); err != nil {
 		return nil, err
 	}
-	slices.SortFunc(writings.summaries, func(a, b summary) int {
+	writings.sort()
+	return contentIndex{collectionName: writings}, nil
+}
+
+func newCollection() collection {
+	return collection{items: make(map[string]writing), summaries: []summary{}}
+}
+
+func (c *collection) add(item writing) {
+	c.items[item.Slug] = item
+	c.summaries = append(c.summaries, item.summary)
+}
+
+func (c *collection) sort() {
+	slices.SortFunc(c.summaries, func(a, b summary) int {
 		if a.Date != b.Date {
 			return strings.Compare(b.Date, a.Date)
 		}
 		return strings.Compare(a.Slug, b.Slug)
 	})
-	return contentIndex{collectionName: writings}, nil
 }
 
 func requirePath(path string, directory bool) error {
@@ -152,20 +164,17 @@ func parseWriting(slug, frontMatter, body string) (writing, error) {
 		return writing{}, fmt.Errorf("invalid YAML front matter: %w", err)
 	}
 	title := fields["title"]
-	if title.Kind != yaml.ScalarNode || title.Tag != "!!str" || strings.TrimSpace(title.Value) == "" {
+	if title.Kind != yaml.ScalarNode || title.Tag != "!!str" {
 		return writing{}, errors.New("title must be a nonblank string")
 	}
 	date := fields["date"]
-	const layout = "2006-01-02"
-	parsed, err := time.Parse(layout, date.Value)
-	if date.Kind != yaml.ScalarNode || (date.Tag != "!!str" && date.Tag != "!!timestamp") ||
-		err != nil || parsed.Year() == 0 || parsed.Format(layout) != date.Value {
+	if date.Kind != yaml.ScalarNode || (date.Tag != "!!str" && date.Tag != "!!timestamp") {
 		return writing{}, errors.New("date must be a valid calendar date in YYYY-MM-DD form")
 	}
-	if strings.TrimSpace(body) == "" {
-		return writing{}, errors.New("body must not be blank")
-	}
 	item := writing{summary: summary{Slug: slug, Title: title.Value, Date: date.Value}, Body: body}
+	if err := validateWriting(item); err != nil {
+		return writing{}, err
+	}
 	if value, exists := fields["summary"]; exists {
 		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" {
 			return writing{}, errors.New("summary must be a string")
@@ -173,4 +182,19 @@ func parseWriting(slug, frontMatter, body string) (writing, error) {
 		item.Summary = &value.Value
 	}
 	return item, nil
+}
+
+func validateWriting(item writing) error {
+	if strings.TrimSpace(item.Title) == "" {
+		return errors.New("title must be a nonblank string")
+	}
+	const layout = "2006-01-02"
+	parsed, err := time.Parse(layout, item.Date)
+	if err != nil || parsed.Year() == 0 || parsed.Format(layout) != item.Date {
+		return errors.New("date must be a valid calendar date in YYYY-MM-DD form")
+	}
+	if strings.TrimSpace(item.Body) == "" {
+		return errors.New("body must not be blank")
+	}
+	return nil
 }

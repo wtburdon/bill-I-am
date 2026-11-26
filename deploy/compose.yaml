@@ -1,0 +1,12 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: app/server/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:?set GIT_SHA to the full Git commit}
+    command: ["serve", "-content-dir", "/content"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../app/content:/content:ro

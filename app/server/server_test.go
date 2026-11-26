@@ -57,7 +57,7 @@ func TestWritingAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := newSite(index, nil, "dev")
+	server := newSite(index, "dev")
 	res := request(server, "GET", "/api/v1/writing", "")
 	var list []map[string]string
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &list) != nil || len(list) != 3 {
@@ -110,7 +110,7 @@ func TestEmptyCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := request(newSite(index, nil, "dev"), "GET", "/api/v1/writing", "")
+	res := request(newSite(index, "dev"), "GET", "/api/v1/writing", "")
 	if res.Code != 200 || strings.TrimSpace(res.Body.String()) != "[]" {
 		t.Fatalf("empty list: %d %s", res.Code, res.Body)
 	}
@@ -135,25 +135,15 @@ func TestRejectsSymlinkedPublishedFile(t *testing.T) {
 	}
 }
 
-func TestStaticRoutesAndProbes(t *testing.T) {
-	root := t.TempDir()
-	writeFixture(t, root, "index.html", "<!doctype html><title>Site</title>")
-	writeFixture(t, root, "assets/main-D3Lkc82f.js", "console.log('site')")
-	dist, err := os.OpenRoot(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dist.Close()
-
+func TestAPIOnlyRoutesAndProbes(t *testing.T) {
 	const sha = "0123456789abcdef0123456789abcdef01234567"
-	site := newSite(nil, dist, sha)
+	site := newSite(nil, sha)
 	for _, tc := range []struct {
 		path        string
 		status      int
 		cache, body string
 	}{
-		{"/writing/first-light", 200, "no-cache", "<title>Site</title>"},
-		{"/assets/main-D3Lkc82f.js", 200, "public, max-age=31536000, immutable", "console.log"},
+		{"/writing", 404, "", ""},
 		{"/assets/missing", 404, "", ""},
 		{"/missing.js", 404, "", ""},
 		{"/api/unknown", 404, "", "not_found"},
