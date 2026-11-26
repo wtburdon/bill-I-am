@@ -16,6 +16,9 @@ on:
       restore_sha:
         description: Full Git SHA of a previously deployed release
         type: string
+      restore_version:
+        description: Cloudflare Worker version ID from that release's deployment summary
+        type: string
 
 permissions:
   contents: read
@@ -39,7 +42,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - run: VITE_RELEASE_SHA="$GITHUB_SHA" npm run build
       - name: Test and export the release
         working-directory: app/server
         run: |
@@ -119,10 +122,9 @@ jobs:
           registry_tag="registry.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/$local_image"
           image=$(docker image inspect --format '{{join .RepoDigests "\n"}}' "$registry_tag" | grep -F "registry.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/billiam-api@sha256:")
           node deploy/cloudflare/prepare-release.mjs "$GITHUB_SHA" "$image" "$config" "$secrets_file"
-          export WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/worker-upload.jsonl"
-          npm exec -- wrangler versions upload --config "$config" --tag "$GITHUB_SHA" --secrets-file "$secrets_file"
-          version=$(jq -ers 'map(.version_id | select(. != null)) | last | select(test("^[0-9a-f-]{36}$"))' "$WRANGLER_OUTPUT_FILE_PATH")
-          npm exec -- wrangler versions deploy --config "$config" "$version@100%" --yes
+          export WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/worker-deploy.jsonl"
+          npm exec -- wrangler deploy --config "$config" --autoconfig=false --tag "$GITHUB_SHA" --secrets-file "$secrets_file"
+          version=$(jq -ers 'map(select(.type == "deploy") | .version_id) | last | select(test("^[0-9a-f-]{36}$"))' "$WRANGLER_OUTPUT_FILE_PATH")
           printf 'Git SHA: `%s`\n\nWorker version: `%s`\n\nAPI image: `%s`\n' "$GITHUB_SHA" "$version" "$image" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify the active release
         env:
@@ -159,7 +161,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           WORKER_NAME: ${{ vars.WORKER_NAME }}
           RESTORE_SHA: ${{ inputs.restore_sha }}
-        run: npm exec -- wrangler versions deploy --name "$WORKER_NAME" --version-tag "$RESTORE_SHA" --percentage 100 --yes
+          RESTORE_VERSION: ${{ inputs.restore_version }}
+        run: |
+          set -euo pipefail
+          [[ "$RESTORE_VERSION" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]
+          npm exec -- wrangler versions view --name "$WORKER_NAME" "$RESTORE_VERSION" --json |
+            jq -e --arg sha "$RESTORE_SHA" '.annotations["workers/tag"] == $sha and any(.resources.bindings[]; .name == "RELEASE_SHA" and .type == "plain_text" and .text == $sha)' >/dev/null
+          npm exec -- wrangler versions deploy --name "$WORKER_NAME" "$RESTORE_VERSION@100%" --yes
       - name: Verify the restored release
         env:
           SITE_ORIGIN: ${{ vars.SITE_ORIGIN }}

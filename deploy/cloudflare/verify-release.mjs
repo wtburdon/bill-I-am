@@ -44,6 +44,7 @@ const page = await get(first ? "/writing/" + first.slug : "/writing", {
 assert.equal(page.status, 200);
 const pageSource = await page.text();
 assert.match(pageSource, /<div id="root"><\/div>/);
+assert.match(pageSource, new RegExp('<meta name="release-sha" content="' + sha + '">'));
 const asset = await get(pageSource.match(/src="(\/assets\/[^"]+\.js)"/)[1]);
 assert.equal(asset.status, 200);
 assert.match(asset.headers.get("Content-Type"), /javascript/);

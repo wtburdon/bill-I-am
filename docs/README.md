@@ -57,7 +57,7 @@ Validate and export writing with the same Go parser and ordering. Production Go 
 1. On a pull request, GitHub Actions installs locked dependencies, type-checks and builds React, tests and vets Go, validates all published content, and exercises the built image over HTTP. Content-only changes follow the same path. PR checks use local fixtures and storage emulation.
 2. On a push to `main`, export the exact merge SHA to `releases/<git-sha>/snapshot.json` and `releases/<git-sha>/manifest.json`. Publish media under `blobs/<sha256>` first. Atomically create objects and verify stored bytes. Use bucket-scoped write credentials in the publishing environment.
 3. Upload a Worker version with the matching Vite build, the Git SHA, and the API image digest. Activate it after publication succeeds. Check the SHA, writing, deep link, asset, and media through the public origin.
-4. Restore a previous Git SHA by deploying the retained Worker version tagged with that SHA. It carries the previous frontend and API image and points at the previous R2 release. Repeat public verification. See the [release runbook](../deploy/cloudflare/README.md).
+4. Restore a previous Git SHA by deploying its retained Worker version by ID after checking that the version matches the SHA. It carries the previous frontend and API image and points at the previous R2 release. Repeat public verification. See the [release runbook](../deploy/cloudflare/README.md).
 
 ## When the platform grows
 

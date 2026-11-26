@@ -45,6 +45,15 @@ test("publish, switch, and restore complete releases through Workers Static Asse
     return binary;
   }
   const [apiA, apiB, apiC] = await Promise.all([build(shaA), build(shaB), build(shaC)]);
+  async function buildFrontend(sha) {
+    const out = path.join(temp, "client-" + sha[0]);
+    await exec(process.execPath, [
+      "node_modules/vite/bin/vite.js", "build", "app/client",
+      "--config", "app/client/vite.config.js", "--outDir", out,
+    ], { cwd: root, env: { ...process.env, VITE_RELEASE_SHA: sha } });
+    return out;
+  }
+  const [clientA, clientB] = await Promise.all([buildFrontend(shaA), buildFrontend(shaB)]);
   async function exportRelease(name, sha, body, image) {
     const source = path.join(temp, name, "content");
     const output = path.join(temp, name, "export");
@@ -76,14 +85,15 @@ test("publish, switch, and restore complete releases through Workers Static Asse
       },
     },
     assets: {
-      directory: path.join(root, "app/client/dist"),
+      directory: clientA,
       binding: config.assets.binding,
       run_worker_first: config.assets.run_worker_first,
       routerConfig: { has_user_worker: true },
       assetConfig: { not_found_handling: config.assets.not_found_handling },
     },
   };
-  const workerOptions = (bindings) => convertV4MiniflareOptions({ ...options, bindings });
+  const workerOptions = (bindings, directory = clientA) =>
+    convertV4MiniflareOptions({ ...options, bindings, assets: { ...options.assets, directory } });
   const storage = new Miniflare(workerOptions({ RELEASE_SHA: shaA }));
   cleanup.push(() => storage.dispose());
   const storageURL = await storage.ready;
@@ -130,8 +140,8 @@ test("publish, switch, and restore complete releases through Workers Static Asse
     assert.equal(await (await fetch(origin + "/readyz")).text(), "ok\n");
     return { origin, stop };
   };
-  const activate = async (sha, api) => {
-    await storage.setOptions(workerOptions({ RELEASE_SHA: sha, API_TEST_ORIGIN: api.origin }));
+  const activate = async (sha, api, client) => {
+    await storage.setOptions(workerOptions({ RELEASE_SHA: sha, API_TEST_ORIGIN: api.origin }, client));
     storageEnv.R2_ENDPOINT = new URL("/cdn-cgi/local/r2/s3", await storage.ready).href;
   };
   const get = (pathname, init) => storage.dispatchFetch("http://localhost" + pathname, init);
@@ -140,6 +150,9 @@ test("publish, switch, and restore complete releases through Workers Static Asse
     const versionBody = await version.text();
     assert.equal(version.status, 200, versionBody);
     assert.equal(JSON.parse(versionBody).gitSha, sha);
+    const shell = await get("/writing/evening", { headers: { "Sec-Fetch-Mode": "navigate", Accept: "text/html" } });
+    assert.equal(shell.status, 200);
+    assert.match(await shell.text(), new RegExp('<meta name="release-sha" content="' + sha + '">'));
     assert.equal((await (await get("/api/v1/writing/evening")).json()).body, text);
     const response = await get(media);
     assert.equal(response.status, 200);
@@ -149,7 +162,7 @@ test("publish, switch, and restore complete releases through Workers Static Asse
 
   await publish(shaA, exportA);
   const a = await startAPI(apiA, shaA);
-  await activate(shaA, a);
+  await activate(shaA, a, clientA);
   const etagA = await assertRelease(shaA, textA, imageA);
   const page = await get("/writing/evening", { headers: { "Sec-Fetch-Mode": "navigate", Accept: "text/html" } });
   assert.equal(page.status, 200);
@@ -183,7 +196,7 @@ test("publish, switch, and restore complete releases through Workers Static Asse
   const conflicting = await exportRelease("conflicting", shaB, "Other text.\n", imageB);
   await assert.rejects(publish(shaB, conflicting), /conflicting bytes.*snapshot/);
   const b = await startAPI(apiB, shaB);
-  await activate(shaB, b);
+  await activate(shaB, b, clientB);
   const etagB = await assertRelease(shaB, textB, imageB);
   assert.notEqual(etagB, etagA);
   const head = await get(media, { method: "HEAD" });
@@ -196,7 +209,7 @@ test("publish, switch, and restore complete releases through Workers Static Asse
   assert.equal((await get(media, { headers: { "If-None-Match": etagA } })).status, 200);
   await b.stop();
   assert.deepEqual(Buffer.from(await (await get(media)).arrayBuffer()), imageB);
-  await activate(shaA, a);
+  await activate(shaA, a, clientA);
   assert.equal(await assertRelease(shaA, textA, imageA), etagA);
 
   await assert.rejects(startAPI(apiC, shaC), /NoSuchKey|404|not found/i);

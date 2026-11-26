@@ -19,7 +19,7 @@ Keep prior Worker versions, registry image digests, and R2 objects used by recov
 
 ## Restore a release
 
-Run **Cloudflare release** with the same target environment, **restore**, and the full Git SHA of a prior deployment. The workflow selects the retained Worker version by tag, shifts traffic to it, and repeats public verification against the restored commit. The version carries its own client assets and named API image, and the Worker selects the corresponding writing and media from R2. If the platform no longer retains a version, redeploy the corresponding Git commit with the same release SHA and retained content objects.
+Run **Cloudflare release** with the same target environment, **restore**, the full Git SHA, and the Worker version ID from that deployment's summary. The workflow checks the version's Git tag and release binding before shifting traffic. The version carries its own client assets and named API image, and the Worker selects the corresponding writing and media from R2. Verification runs against the restored commit. If the platform no longer retains a version, redeploy the corresponding Git commit with the same release SHA and retained content objects.
 
 ## Staging acceptance
 
