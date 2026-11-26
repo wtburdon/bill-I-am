@@ -25,4 +25,7 @@ jobs:
           go run . validate -content-dir ../content
       - name: Exercise the release image
         shell: bash
-        run: bash app/server/smoke-image.sh
+        run: |
+          bash app/server/smoke-image.sh checked-out
+          bash app/server/smoke-image.sh renamed
+          bash app/server/smoke-image.sh empty
