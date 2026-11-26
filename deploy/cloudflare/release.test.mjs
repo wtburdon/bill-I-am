@@ -53,7 +53,8 @@ test("publish, switch, and restore complete releases through Workers Static Asse
     ], { cwd: root, env: { ...process.env, VITE_RELEASE_SHA: sha } });
     return out;
   }
-  const [clientA, clientB] = await Promise.all([buildFrontend(shaA), buildFrontend(shaB)]);
+  const clientA = await buildFrontend(shaA);
+  const clientB = await buildFrontend(shaB);
   async function exportRelease(name, sha, body, image) {
     const source = path.join(temp, name, "content");
     const output = path.join(temp, name, "export");
